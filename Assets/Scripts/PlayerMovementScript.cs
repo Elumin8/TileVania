@@ -3,30 +3,31 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 public class PlayerMovementScript : MonoBehaviour
 {
-    Rigidbody2D rb2D;
+    [SerializeField] Rigidbody2D rb2D;
     Vector2 moveInput;
     [SerializeField] float xMovementSpeed;
     [SerializeField] float jumpSpeed;
     [SerializeField] float ladderMovementSpeed;
-    Animator animator;
-    CapsuleCollider2D collider2D;
+    [SerializeField] Animator animator;
+    [SerializeField] CapsuleCollider2D collider2D;
     float startingGravityScale;
-
+    [SerializeField] BoxCollider2D boxCollider2D;
+    [SerializeField] Vector2 deathKick = new Vector2(10f, 10f);
+    [SerializeField] GameObject bullet;
+    [SerializeField] Transform gun;
+    bool isAlive = true;
     void Start()
     {
-        rb2D = GetComponent<Rigidbody2D>();
-        animator = GetComponent<Animator>();
-        collider2D = GetComponent<CapsuleCollider2D>();
         startingGravityScale = rb2D.gravityScale;
     }
 
     void Update()
     {
-        Run();
-        FlipSprite();
-        ClimbLadder();
+        SetAlive();
+        Die();
     }
     void Run()
     {
@@ -43,13 +44,16 @@ public class PlayerMovementScript : MonoBehaviour
     }
     void OnJump(InputValue value)
     {
-        if (value.isPressed && collider2D.IsTouchingLayers(LayerMask.GetMask("Ground")))
+        if(!isAlive){ return; }
+        if (value.isPressed
+         && boxCollider2D.IsTouchingLayers(LayerMask.GetMask("Ground")))
         {
             rb2D.velocity += new Vector2(0f, jumpSpeed);
         }
     }
     void OnMove(InputValue inputValue)
-    {
+    {   
+        if(!isAlive){ return; }
         moveInput = inputValue.Get<Vector2>();
     }
 
@@ -66,15 +70,15 @@ public class PlayerMovementScript : MonoBehaviour
 
     void ClimbLadder()
     {
-        if (!collider2D.IsTouchingLayers(LayerMask.GetMask("Ladders")))
+        if (!boxCollider2D.IsTouchingLayers(LayerMask.GetMask("Ladders")))
         {
             rb2D.gravityScale = startingGravityScale;
             animator.SetBool("isClimbing", false);
             return;
         }
-            Vector2 movementUp = new Vector2(rb2D.velocity.x, moveInput.y * ladderMovementSpeed);
-            rb2D.velocity = movementUp;
-            rb2D.gravityScale = 0f;
+        Vector2 movementUp = new Vector2(rb2D.velocity.x, moveInput.y * ladderMovementSpeed);
+        rb2D.velocity = movementUp;
+        rb2D.gravityScale = 0f;
         if (Mathf.Abs(rb2D.velocity.y) > 0)
         {
             animator.SetBool("isClimbing", true);
@@ -83,6 +87,46 @@ public class PlayerMovementScript : MonoBehaviour
         {
             animator.SetBool("isClimbing", false);
         }
+    }
+    void Die()
+    {
+        if (collider2D.IsTouchingLayers(LayerMask.GetMask("Enemies")))
+            {
+                DeathAnim();
+            }
+        if (collider2D.IsTouchingLayers(LayerMask.GetMask("Spikes")))
+        {
+            DeathAnim();
+        }
+        
+       
+    }
+    void DeathAnim()
+    {
+        isAlive = false;
+        animator.SetTrigger("Dying");
+        rb2D.velocity = deathKick;
+
+        StartCoroutine(DeathRestart());
+        IEnumerator DeathRestart()
+        {
+            yield return new WaitForSecondsRealtime(1);
+            FindObjectOfType<GameSession>().ProcessPlayerDeath();
+        }
+    }
+    void SetAlive()
+    {
+        if (isAlive)
+        {
+            Run();
+            FlipSprite();
+            ClimbLadder();
+        }
+    }
+    void OnFire(InputValue value)
+    {
+        if(!isAlive){ return; }
+        Instantiate(bullet, gun.position, transform.rotation);
     }
 
 }
